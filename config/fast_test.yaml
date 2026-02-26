@@ -1,0 +1,147 @@
+# defaults:
+#   - _self_          # 首先加载当前文件
+#   - test_syn       # 然后加载test_syn.yaml
+
+data:
+  input_dir: ./data/fast_test
+  output_dir: ./output
+  output_dir: ./output_dir
+  structured_data: False
+  enable_visual: True
+
+# 启用通过实体名合并实体
+enable_merge_entity_by_name: true
+
+# 启用通过实体名的相似度合并实体
+enable_merge_entity_by_sim: False
+merge_entity_by_sim:
+  threshold: 0.95
+  # embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+# 启用通过断言的相似度合并断言
+enable_merge_assertion_by_sim: true
+merge_assertion_by_sim:
+  threshold: 0.95
+  # embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+# 版式解析和KG抽取相关配置
+dataprocessing:
+  enable_assertion_recall: False
+  enable_entity_recall: False
+  mineru:
+    server_url: http://10.178.131.48:30000
+
+  llm:
+    api_key: EMPTY
+    # base_url: http://10.178.131.48:9000/v1
+    # model: Qwen2-7B-Instruct
+    base_url:  
+      - http://10.178.141.79:8000/v1
+      - http://10.178.141.233:8000/v1
+      - http://10.178.133.1:8000/v1
+    
+    model: Qwen3-235B-A22B-Instruct-2507
+    max_concurrent_requests: 256
+
+  vlm:
+    api_key: EMPTY
+    base_url: http://10.178.129.197:8000/v1
+    model: Qwen3-VL-2B-Instruct
+    max_concurrent_requests: 24
+    max_tokens: 4096
+
+embedding_model:
+  api_key: EMPTY
+  base_url: http://10.178.131.43:9000/v1
+  model: qwen3_embedding
+
+# 数据合成相关配置
+subgraph_sampling:
+  sampling_algorithm: no_subgraph_sampling
+  order: 100
+  subgraph_num: 4
+  kwargs:
+    arg1: value1
+    arg2: avlue2
+
+
+trace_generation:
+  selection_method: dfs
+  node_types: ['Entity','Table','Image','Formula'] # ['Document','Chunk','Assertion','Entity','Table','Image','Formula']
+  max_steps: 4
+  num_traces: 4
+  min_deg: 0
+  max_deg: 200
+  mode: in
+  kwargs:
+    arg1: value1
+    arg2: avlue2
+
+
+data_synthesis:
+  api_key: EMPTY
+  base_url:  
+      - http://10.178.141.79:8000/v1
+      - http://10.178.141.233:8000/v1
+      - http://10.178.133.1:8000/v1
+    
+  model: Qwen3-235B-A22B-Instruct-2507
+  task_type: multi_hop_tif
+  max_concurrent_requests: 5
+
+# QA质量过滤相关配置
+evaluation_models:
+  support_models:
+    # 支持度评估模型列表（可以配置多个，支持多数投票）
+    - model: Qwen3-VL-2B-Instruct           # 支持度评估用模型名称
+      base_url: http://10.178.129.197:8000/v1  # 模型服务的 HTTP 基础地址
+      api_key: EMPTY                        # 鉴权用的 API Key（本地服务可为空或固定占位）
+      max_tokens: 1024                      # 单次调用允许的最大生成 token 数
+    - model: Qwen3-VL-2B-Instruct           # 第二个支持度评估模型
+      base_url: http://10.178.129.197:8000/v1
+      api_key: EMPTY
+      max_tokens: 1024
+    - model: Qwen3-VL-2B-Instruct           # 第三个支持度评估模型
+      base_url: http://10.178.129.197:8000/v1
+      api_key: EMPTY
+      max_tokens: 1024
+
+  difficulty_models:
+    # 难度评估使用的模型配置，分为 strong / weak 两个角色
+    strong:
+      model: Qwen3-VL-2B-Instruct           # strong模型
+      base_url: http://10.178.129.197:8000/v1
+      api_key: EMPTY
+      max_tokens: 1024
+    weak:
+      model: Qwen3-VL-2B-Instruct           # weak模型
+      base_url: http://10.178.129.197:8000/v1
+      api_key: EMPTY
+      max_tokens: 1024
+
+  # 新增：复杂度评估使用的大模型配置
+  complexity_model:
+    #评估evaluate_complex的模型（负责对指令复杂度打 1~5 分）
+    model: Qwen3-VL-2B-Instruct
+    base_url: http://10.178.129.197:8000/v1
+    api_key: EMPTY
+    max_tokens: 1024
+
+evaluation:
+  batch_size: 3        # 每次并发评估的样本数量
+  modes:
+    - support               # 启用知识支持度评估
+    - difficulty            # 启用难度评估
+    - complexity            # 启用复杂度评估
+
+  support:
+    mode: majority_vote     # 支持度评估模式：majority_vote（多模型投票）或 single（单模型）
+    models: [0, 1, 2]       # 使用 support_models 列表中的哪些模型（按下标选择）
+
+  difficulty:
+    mode: strong_weak       # strong_weak（强弱模型同时使用），也可设为 strong_only / weak_only
+
+  complexity:
+    enabled: true           # 是否启用复杂度评估
+
+

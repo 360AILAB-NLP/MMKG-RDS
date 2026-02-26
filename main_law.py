@@ -1,0 +1,211 @@
+import hydra
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import DictConfig, OmegaConf
+
+# from util.pdf2md import pdf2md
+# from util.any2pdf import any2pdf
+
+from processor.processor import Processor
+from llms.client import AsyncLLMClient
+from llms.vision_client import AsyncVisionClient
+
+from data_synthesis.net_utils import *
+from data_synthesis.subgraph_sampling import *
+from data_synthesis.trace_generate import *
+from data_synthesis.constants import SAMPLING_AlGORITHM_MAPPING, TRACE_GENERATION_MAPPING
+from data_synthesis.generate_qa import *
+import asyncio
+import os
+import json
+from util.errors import *
+from util.tool import stage_context
+from processor.node import NodeType, node_type_list
+from tqdm.asyncio import tqdm_asyncio
+from data_synthesis.constants import *
+from util.monitor import monitor_function
+from util.export2std_data import convert_to_std_format
+
+
+def xlsx2content_list(xls_file, out_dir):
+    import pandas as pd
+    df = pd.read_excel(xls_file)
+    # 返回第一列
+    first_col = df.iloc[:, 0]
+    # 转换为列表
+    first_col_list = first_col.tolist()
+    # 转换成字典列表， 符合mineru解析后的格式
+    dict_list = [{"text": item, "type": "text"} for idx, item in enumerate(first_col_list)]
+    # 获取xls_file的文件名
+    xls_file_name = os.path.basename(xls_file)
+    # 保存到out_file
+    out_file = os.path.join(out_dir, xls_file_name, "vlm", f"{xls_file_name}_content_list.json")
+    # 如果不存在文件夹，则创建
+    os.makedirs(os.path.dirname(out_file), exist_ok=True)
+    with open(out_file, "w", encoding="utf-8") as f:
+        json.dump(dict_list, f, ensure_ascii=False, indent=4)
+    return dict_list
+
+def run_processor(cfg: DictConfig) -> None:
+    output_dir = cfg.data.parse_dir
+    input_dir = cfg.data.input_dir
+    # 结构化数据
+    if cfg.data.structured_data:
+        processor = Processor(
+            cfg=cfg,
+            llm_func=None,
+            vlm_func=None
+        )
+        processor.process_sd(cfg.data.input_dir, ",")
+    else:
+        # 非结构化数据
+        # 0. any2pdf
+        # pdf_dir = any2pdf(input_dir=input_dir)
+        # # pdf_dir = input_dir
+        # # 1. 先提取pdf成基本chunk等
+        # pdf2md(input_dir=pdf_dir, output_dir=output_dir, server_url=cfg.dataprocessing.mineru.server_url)
+        xlsx2content_list(input_dir, output_dir)
+
+        llm_client = AsyncLLMClient(api_key=cfg.dataprocessing.llm.api_key, base_url=cfg.dataprocessing.llm.base_url, model=cfg.dataprocessing.llm.model,
+                                    max_concurrent_requests=cfg.dataprocessing.llm.max_concurrent_requests)
+        vlm_client = AsyncVisionClient(api_key=cfg.dataprocessing.vlm.api_key, base_url=cfg.dataprocessing.vlm.base_url, model=cfg.dataprocessing.vlm.model,
+                                    max_concurrent_requests=cfg.dataprocessing.vlm.max_concurrent_requests,
+                                    max_tokens=cfg.dataprocessing.vlm.max_tokens)
+        # @monitor_function("llm_call_log.json")
+        async def llm_func(prompt, system_prompt="", require_json=False, **kwargs):
+            try:
+                res = await llm_client.agenerate(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    model=cfg.dataprocessing.llm.model,
+                    require_json=require_json,
+                    **kwargs,
+                )
+                # print("input_len"+str(len(system_prompt+prompt))+", output_len"+str(len(res['choices'][0]['message']['content'])))
+                return res['choices'][0]['message']['content'].strip()
+            except LLMRetry_Error as e:
+                return ""
+
+        async def vlm_func(image_source, system_prompt="", prompt="", require_json=False, **kwargs):
+            try:
+                res = await vlm_client.agenerate(
+                    system_prompt=system_prompt,
+                    prompts=prompt,
+                    image_source=image_source,
+                    model=cfg.dataprocessing.vlm.model,
+                    require_json=require_json,
+                    **kwargs,
+                )
+                return res['choices'][0]['message']['content'].strip()
+            except LLMRetry_Error as e:
+                return ""
+
+        processor = Processor(
+            cfg=cfg,
+            llm_func=llm_func,
+            vlm_func=vlm_func
+        )
+
+        # 2. 处理数据,生成节点,生成边
+        asyncio.run(processor.aprocess_ud())  # "./node_llm_out.json"
+
+    processor.save_node()
+    processor.save_edge()
+    node_list_path = os.path.join(output_dir, "node_list.json")
+    edge_list_path = os.path.join(output_dir, "edge_list.json")
+    processor.json2graph(node_list_path=node_list_path, edge_list_path=edge_list_path)
+    if cfg.data.enable_visual:
+        node_list_flat_path = os.path.join(output_dir, "node_list_flat.json")
+        processor.visualize_kg(entities=node_list_flat_path, relations=edge_list_path, file_name=os.path.join(output_dir, "knowledge_entity_graph.html"), vis_node_types=[NodeType.Entity])
+        processor.visualize_kg(entities=node_list_flat_path, relations=edge_list_path, file_name=os.path.join(output_dir, "knowledge_node_graph.html"), vis_node_types=node_type_list)
+
+    
+
+async def data_generate(cfg: DictConfig) -> None:
+    print(cfg.data_synthesis.base_url)
+    print(cfg.data_synthesis.api_key)
+    print(cfg.data_synthesis.model)
+    client = AsyncLLMClient(api_key=cfg.data_synthesis.api_key, base_url=cfg.data_synthesis.base_url,
+                            model=cfg.data_synthesis.model,
+                            max_concurrent_requests=cfg.data_synthesis.max_concurrent_requests)
+    path = os.path.join(cfg.data.output_dir, "graph.graphml")
+    subgraph_num = cfg.subgraph_sampling.subgraph_num
+    # G = load_nx_graphml(path)
+    G = load_nx_graphml(path)  # 作为测试
+    # 1. 子图采样
+    sampler_chosen = SAMPLING_AlGORITHM_MAPPING[cfg.subgraph_sampling.sampling_algorithm]
+    sampler = sampler_chosen(G=G, order=cfg.subgraph_sampling.order, **cfg.subgraph_sampling.kwargs)  # kwargs会放在config中
+    subgraphs = []
+    for _ in range(subgraph_num):
+        subgraphs.append(sampler.sample_subgraph())
+
+    # 2. 路径生成
+    task_list = []
+    selector_chosen = TRACE_GENERATION_MAPPING[cfg.trace_generation.selection_method]
+    # node_types = None or cfg.trace_generation.node_types
+    if "all" in cfg.data_synthesis.task_type_list:
+        task_type_list = TASK_INFO.keys()
+    else:
+        task_type_list = cfg.data_synthesis.task_type_list
+    for subgraph in subgraphs:
+        # node_types=None or cfg.trace_generation.node_types
+        for task_type in task_type_list:
+            selector = selector_chosen(G=G, sampling_output=subgraph, node_types=cfg.trace_generation.node_types, **cfg.trace_generation.kwargs)
+            traces = selector.select_trace(max_steps=cfg.trace_generation.max_steps,
+                                        num_traces=cfg.trace_generation.num_traces,
+                                        min_deg=cfg.trace_generation.min_deg,
+                                        max_deg=cfg.trace_generation.max_deg,
+                                        mode=cfg.trace_generation.mode,
+                                        task_info=TASK_INFO[task_type])                  
+            if len(traces.paths)==0: continue
+            # 3. 数据生成
+            qa_generator = QAGenerator(client=client, task_info=TASK_INFO[task_type])
+            task = asyncio.create_task(
+                qa_generator.generate_qa_batch(trace_output=traces, task_type=task_type)
+            )
+            task_list.append(task)
+    res = await tqdm_asyncio.gather(*task_list,desc="data generating")
+    qa_list = []
+    for r in res:
+        qa_list.extend(r)
+    
+    data_gene_path = os.path.join(output_dir, "data_gene.json")
+    with open(data_gene_path, "w", encoding="utf-8") as f:
+        json.dump(qa_list, f, indent=4, ensure_ascii=False)
+
+
+from qafilter.enhanced_refactored_pipeline import RefactoredEnhancedEvaluationPipeline as qa_eval_pipeline
+
+async def datafilter(cfg: DictConfig):
+    pipeline = qa_eval_pipeline(cfg)
+    input_file = os.path.join(output_dir, "data_gene.json")
+    output_file = os.path.join(output_dir, "data_filter.json")
+    await pipeline.run_pipeline(
+        input_file=input_file,
+        output_file=output_file,
+        batch_size=5
+    )
+
+
+@hydra.main(config_path="config", config_name="dev", version_base=None)
+def main(cfg: DictConfig) -> None:
+    # 1. 数据处理构建图谱
+    with stage_context("数据处理构建图谱", 1):
+        run_processor(cfg)
+    # 2. 数据生成
+    with stage_context("数据生成", 2):
+        asyncio.run(data_generate(cfg))
+    # 3. 数据过滤
+    with stage_context("数据过滤", 3):
+        asyncio.run(datafilter(cfg))
+    # 4. 数据转换为标准格式
+    with stage_context("数据转换为标准格式", 4):
+        input_file = os.path.join(output_dir, "data_filter.json")
+        output_file = os.path.join(output_dir, "data_filter_std.json")
+        convert_to_std_format(input_file, output_file, mode='sft', format="messages")
+
+
+
+if __name__ == "__main__":
+    main()

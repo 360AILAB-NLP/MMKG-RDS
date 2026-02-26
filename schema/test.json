@@ -1,0 +1,31 @@
+{
+    "Ontology": {
+        "Person":{
+
+        },
+        "Organization":{
+
+        },
+        "Location":{
+
+        },
+        "Event":{
+
+        },
+        "Product":{
+
+        },
+        "Time":{
+
+        },
+        "Cause":{
+
+        },
+        "Outcome":{
+
+        },
+        "Other":{
+
+        }
+    }
+}

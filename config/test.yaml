@@ -1,0 +1,123 @@
+# defaults:
+#   - _self_          # 首先加载当前文件
+#   - test_syn       # 然后加载test_syn.yaml
+
+data:
+  input_dir: ./data/pdfs
+  output_dir: ./output
+  output_dir: ./output_dir
+  structured_data: False
+  enable_visual: True
+
+# 启用通过实体名合并实体
+enable_merge_entity_by_name: true
+
+# 启用通过实体名的相似度合并实体
+enable_merge_entity_by_sim: true
+merge_entity_by_sim:
+  threshold: 0.95
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+
+# 启用通过断言的相似度合并断言
+enable_merge_assertion_by_sim: true
+merge_assertion_by_sim:
+  threshold: 0.95
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+
+# 版式解析和KG抽取相关配置
+dataprocessing:
+  mineru:
+    server_url: http://10.178.131.48:30000
+
+  llm:
+    api_key: EMPTY
+    base_url: http://10.178.131.48:9000/v1
+    model: Qwen2-7B-Instruct
+    max_concurrent_requests: 256
+
+  vlm:
+    api_key: EMPTY
+    base_url: http://10.178.129.197:8000/v1
+    model: Qwen3-VL-2B-Instruct
+    max_concurrent_requests: 24
+    max_tokens: 4096
+  
+embedding_model:
+  api_key: EMPTY
+  base_url: http://10.178.129.197:8000/v1
+  model: qwen3_embedding
+
+# 数据合成相关配置
+subgraph_sampling:
+  sampling_algorithm: no_subgraph_sampling
+  order: 100
+  subgraph_num: 4
+  kwargs:
+    arg1: value1
+    arg2: avlue2
+
+
+trace_generation:
+  selection_method: dfs
+  node_types: ['Entity']  # ['Document','Chunk','Assertion','Entity','Table','Image','Formula']
+  max_steps: 4
+  num_traces: 4
+  min_deg: 1
+  max_deg: 200
+  is_neighbor: false
+  kwargs:
+    arg1: value1
+    arg2: avlue2
+
+
+data_synthesis:
+  api_key: EMPTY
+  base_url:  
+      - http://10.178.141.79:8000/v1
+      - http://10.178.141.233:8000/v1
+      - http://10.178.133.1:8000/v1
+    
+  model: Qwen3-235B-A22B-Instruct-2507
+  task_type: mcq  # multi_hop
+  max_concurrent_requests: 5
+
+# QA质量过滤相关配置
+evaluation_models:
+  support_models:
+    - model: Qwen3-VL-2B-Instruct
+      base_url: http://10.178.129.197:8000/v1/chat/completions
+      api_key: EMPTY
+      max_tokens: 1024
+    - model: Qwen3-VL-2B-Instruct
+      base_url: http://10.178.129.197:8000/v1/chat/completions
+      api_key: EMPTY
+      max_tokens: 1024
+    - model: Qwen3-VL-2B-Instruct
+      base_url: http://10.178.129.197:8000/v1/chat/completions
+      api_key: EMPTY
+      max_tokens: 1024
+  difficulty_models:
+    strong:
+      model: Qwen3-VL-2B-Instruct
+      base_url: http://10.178.129.197:8000/v1/chat/completions
+      api_key: EMPTY
+      max_tokens: 1024
+    weak:
+      model: Qwen3-VL-2B-Instruct
+      base_url: http://10.178.129.197:8000/v1/chat/completions
+      api_key: EMPTY
+      max_tokens: 1024
+
+evaluation:
+  batch_size: 3
+  enable_logging: true
+  log_level: INFO
+  deduplication:
+    enabled: true
+    method: qacot_hash
+  io:
+    input_format: json
+    output_format: json
+    encoding: utf-8
