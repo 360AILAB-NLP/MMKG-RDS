@@ -4,7 +4,7 @@
   # MMKG-RDS
   
   ### 🧠 Reasoning Data Synthesis via Deep Mining of Multimodal Knowledge Graphs
-  
+  [![arXiv](https://img.shields.io/badge/arXiv-2510.03663-b31b1b.svg)](https://arxiv.org/abs/2602.23632)
   [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
   [![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen.svg)](https://www.python.org/)
   [![GitHub Stars](https://img.shields.io/github/stars/yourusername/MMKG-RDS?style=social)](https://github.com/360AILAB-NLP/MMKG-RDS)
