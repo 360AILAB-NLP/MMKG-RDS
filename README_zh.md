@@ -4,10 +4,10 @@
   # MMKG-RDS
   
   ### 🧠 基于多模态知识图谱深度挖掘的推理数据合成
-  
+  [![arXiv](https://img.shields.io/badge/arXiv-2510.03663-b31b1b.svg)](https://arxiv.org/abs/2602.23632)
   [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
   [![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen.svg)](https://www.python.org/)
-  [![GitHub Stars](https://img.shields.io/github/stars/yourusername/MMKG-RDS?style=social)](https://github.com/360AILAB-NLP/MMKG-RDS)
+  [![GitHub Stars](https://img.shields.io/github/stars/360AILAB-NLP/MMKG-RDS?style=social)](https://github.com/360AILAB-NLP/MMKG-RDS)
   
   [English](README.md) | [中文](README_zh.md)
 </div>
@@ -415,11 +415,14 @@ MMKG-RDS/
 
 如果您在研究中使用了 MMKG-RDS，请引用：
 ```bibtex
-@article{mmkg-rds-2026,
-  title={MMKG-RDS: Reasoning Data Synthesis via Deep Mining of Multimodal Knowledge Graphs},
-  author={Co-authors},
-  journal={arXiv preprint arXiv:2026.xxxxx},
-  year={2026}
+@misc{zhan2026mmkgrdsreasoningdatasynthesis,
+      title={MMKG-RDS: Reasoning Data Synthesis via Deep Mining of Multimodal Knowledge Graphs}, 
+      author={Lun Zhan and Feng Xiong and Huanyong Liu and Feng Zhang and Yuhui Yin},
+      year={2026},
+      eprint={2602.23632},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2602.23632}, 
 }
 ```
 
